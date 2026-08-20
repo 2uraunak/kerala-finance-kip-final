@@ -1,0 +1,267 @@
+version: "3.9"
+
+services:
+  # ─────────────────────────── Infrastructure ────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: kip-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kip}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kip_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-kipdb}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kip"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: kip-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: kip-minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:-minioadmin123}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: kip-chromadb
+    volumes:
+      - chroma_data:/chroma/chroma
+    ports:
+      - "8100:8000"
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: kip-ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    # GPU support (uncomment if NVIDIA GPU available)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # ─────────────────────────── Backend Services ──────────────────────────
+  api-gateway:
+    build: ./services/api-gateway
+    container_name: kip-api-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://kip:kip_secret@postgres:5432/kipdb
+      - REDIS_URL=redis://redis:6379/0
+      - MINIO_URL=minio:9000
+      - MINIO_USER=minioadmin
+      - MINIO_PASSWORD=minioadmin123
+      - CHROMADB_URL=http://chromadb:8000
+      - OLLAMA_URL=http://ollama:11434
+      - JWT_SECRET=${JWT_SECRET:-supersecret_jwt_key_change_in_prod}
+      - INGESTION_SERVICE_URL=http://ingestion-service:8001
+      - SEARCH_SERVICE_URL=http://search-service:8002
+      - LINEAGE_SERVICE_URL=http://lineage-service:8003
+      - EXTRACTION_SERVICE_URL=http://extraction-service:8004
+      - GST_AGENT_URL=http://gst-agent-service:8005
+      - POLICY_AGENT_URL=http://policy-agent-service:8006
+      - ANALYTICS_SERVICE_URL=http://analytics-service:8007
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - audit_db:/app/audit
+      - ./scripts:/app/scripts:ro
+      - ./tests:/app/tests:ro
+    restart: unless-stopped
+
+  ingestion-service:
+    build: ./services/ingestion-service
+    container_name: kip-ingestion
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql://kip:kip_secret@postgres:5432/kipdb
+      - REDIS_URL=redis://redis:6379/0
+      - MINIO_URL=minio:9000
+      - MINIO_USER=minioadmin
+      - MINIO_PASSWORD=minioadmin123
+      - CHROMADB_URL=http://chromadb:8000
+      - OLLAMA_URL=http://ollama:11434
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./data/sample_documents:/app/sample_documents:ro
+      - ./scripts:/app/scripts:ro
+    restart: unless-stopped
+
+  celery-worker:
+    build: ./services/ingestion-service
+    container_name: kip-celery-worker
+    command: celery -A tasks.ingest_document worker --loglevel=info --concurrency=2
+    environment:
+      - DATABASE_URL=postgresql://kip:kip_secret@postgres:5432/kipdb
+      - REDIS_URL=redis://redis:6379/0
+      - MINIO_URL=minio:9000
+      - MINIO_USER=minioadmin
+      - MINIO_PASSWORD=minioadmin123
+      - CHROMADB_URL=http://chromadb:8000
+      - OLLAMA_URL=http://ollama:11434
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./data/sample_documents:/app/sample_documents:ro
+      - ./scripts:/app/scripts:ro
+    restart: unless-stopped
+
+  search-service:
+    build: ./services/search-service
+    container_name: kip-search
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=postgresql://kip:kip_secret@postgres:5432/kipdb
+      - REDIS_URL=redis://redis:6379/0
+      - CHROMADB_URL=http://chromadb:8000
+      - OLLAMA_URL=http://ollama:11434
+    depends_on:
+      - chromadb
+      - redis
+    restart: unless-stopped
+
+  lineage-service:
+    build: ./services/lineage-service
+    container_name: kip-lineage
+    ports:
+      - "8003:8003"
+    environment:
+      - DATABASE_URL=postgresql://kip:kip_secret@postgres:5432/kipdb
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  extraction-service:
+    build: ./services/extraction-service
+    container_name: kip-extraction
+    ports:
+      - "8004:8004"
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+      - MINIO_URL=minio:9000
+      - MINIO_USER=minioadmin
+      - MINIO_PASSWORD=minioadmin123
+    restart: unless-stopped
+
+  gst-agent-service:
+    build: ./services/gst-agent-service
+    container_name: kip-gst-agent
+    ports:
+      - "8005:8005"
+    environment:
+      - CHROMADB_URL=http://chromadb:8000
+      - OLLAMA_URL=http://ollama:11434
+      - SEARCH_SERVICE_URL=http://search-service:8002
+    depends_on:
+      - chromadb
+    restart: unless-stopped
+
+  policy-agent-service:
+    build: ./services/policy-agent-service
+    container_name: kip-policy-agent
+    ports:
+      - "8006:8006"
+    environment:
+      - CHROMADB_URL=http://chromadb:8000
+      - OLLAMA_URL=http://ollama:11434
+      - SEARCH_SERVICE_URL=http://search-service:8002
+      - LINEAGE_SERVICE_URL=http://lineage-service:8003
+    depends_on:
+      - chromadb
+    restart: unless-stopped
+
+  analytics-service:
+    build: ./services/analytics-service
+    container_name: kip-analytics
+    ports:
+      - "8007:8007"
+    environment:
+      - DATABASE_URL=postgresql://kip:kip_secret@postgres:5432/kipdb
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - audit_db:/app/audit
+    restart: unless-stopped
+
+  # ─────────────────────────── Frontend ──────────────────────────────────
+  frontend:
+    build: ./frontend
+    container_name: kip-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api-gateway
+    restart: unless-stopped
+
+  # ─────────────────────────── Reverse Proxy ─────────────────────────────
+  nginx:
+    build: ./nginx
+    container_name: kip-nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - frontend
+      - api-gateway
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  chroma_data:
+  ollama_data:
+  audit_db:
