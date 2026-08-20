@@ -69,27 +69,13 @@ SOURCE DOCUMENTS:
 ANSWER (with source citations):"""
 
     try:
-        headers = {
-            "Authorization": f"Bearer YOUR_GROQ_API_KEY_HERE",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": "llama-3.1-8b-instant",
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.0
-        }
-        llm_resp = httpx.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers=headers,
-            json=data,
-            timeout=15.0
-        )
-        if llm_resp.status_code == 200:
-            answer = llm_resp.json()["choices"][0]["message"]["content"]
-            # Estimate confidence based on top chunk score
-            top_score = chunks[0].get("rrf_score", chunks[0].get("score", 0.5))
-            confidence = min(round(float(top_score) * 1.5, 2), 1.0)
-            return answer, confidence
+        from langchain_ollama import OllamaLLM
+        llm = OllamaLLM(model=OLLAMA_MODEL, base_url=OLLAMA_URL)
+        answer = llm.invoke(prompt)
+        # Estimate confidence based on top chunk score
+        top_score = chunks[0].get("rrf_score", chunks[0].get("score", 0.5))
+        confidence = min(round(float(top_score) * 1.5, 2), 1.0)
+        return answer, confidence
     except Exception as e:
         print(f"LLM generation error: {e}")
 

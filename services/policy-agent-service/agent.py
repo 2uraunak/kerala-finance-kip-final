@@ -76,17 +76,13 @@ Recommendation: [Action proposed]
 Financial Implication: [Budget impact if any]
 
 Draft the policy note:"""
-    headers = {
-        "Authorization": f"Bearer YOUR_GROQ_API_KEY_HERE",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "model": "llama-3.1-8b-instant",
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.0
-    }
-    resp = httpx.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=data, timeout=30.0)
-    return resp.json()["choices"][0]["message"]["content"]
+    try:
+        from langchain_ollama import OllamaLLM
+        llm = OllamaLLM(model=OLLAMA_MODEL, base_url=OLLAMA_URL)
+        answer = llm.invoke(prompt)
+        return answer
+    except Exception as e:
+        return f"Draft generation unavailable. System error: {e}"
 
 
 # ─── Define LangChain Tools ──────────────────────────────────────────────────

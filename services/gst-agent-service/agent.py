@@ -88,17 +88,9 @@ CONTEXT:
 ANSWER (with specific circular/notification references):"""
 
     try:
-        headers = {
-            "Authorization": f"Bearer YOUR_GROQ_API_KEY_HERE",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": "llama-3.1-8b-instant",
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.0
-        }
-        resp = httpx.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=data, timeout=30.0)
-        answer = resp.json()["choices"][0]["message"]["content"]
+        from langchain_ollama import OllamaLLM
+        llm = OllamaLLM(model=OLLAMA_MODEL, base_url=OLLAMA_URL)
+        answer = llm.invoke(prompt)
     except Exception as e:
         answer = f"LLM unavailable. Based on database: {context}"
 

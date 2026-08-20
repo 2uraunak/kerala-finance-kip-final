@@ -15,27 +15,13 @@ MINIO_URL = os.getenv("MINIO_URL", "minio:9000")
 
 
 def _call_llm(prompt: str, max_tokens: int = 2000) -> str:
-    headers = {
-        "Authorization": f"Bearer YOUR_GROQ_API_KEY_HERE",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "model": "llama-3.1-8b-instant",
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.0
-    }
     try:
-        resp = httpx.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers=headers,
-            json=data,
-            timeout=120.0,
-        )
-        if resp.status_code == 200:
-            return resp.json()["choices"][0]["message"]["content"]
-    except Exception:
-        pass
-    return ""
+        from langchain_ollama import OllamaLLM
+        llm = OllamaLLM(model=OLLAMA_MODEL, base_url=OLLAMA_URL)
+        return llm.invoke(prompt)
+    except Exception as e:
+        print(f"Extraction LLM error: {e}")
+        return ""
 
 
 def _get_doc_text(doc_id: str) -> str:
