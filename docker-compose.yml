@@ -247,6 +247,16 @@ services:
       - api-gateway
     restart: unless-stopped
 
+  # ─────────────────────────── e-Office Mock Adapter ────────────────────
+  eoffice-adapter:
+    build: ./services/eoffice-adapter
+    container_name: kip-eoffice-adapter
+    ports:
+      - "8010:8010"
+    restart: unless-stopped
+    networks:
+      - default
+
   # ─────────────────────────── Reverse Proxy ─────────────────────────────
   nginx:
     build: ./nginx
@@ -256,6 +266,7 @@ services:
     depends_on:
       - frontend
       - api-gateway
+      - eoffice-adapter
     restart: unless-stopped
 
 volumes:

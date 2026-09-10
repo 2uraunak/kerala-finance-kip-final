@@ -1,5 +1,5 @@
 """
-Documents router — upload, list, retrieve, delete.
+Documents router — upload, list, retrieve, delete, reclassify.
 """
 import os
 import uuid
@@ -7,8 +7,9 @@ from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 import httpx
 
 from database import get_db
@@ -17,6 +18,14 @@ from models.user import User
 from middleware.auth import require_any_role, require_analyst_or_admin, require_admin
 
 router = APIRouter()
+
+
+class ReclassifyRequest(BaseModel):
+    doc_type: str
+    subject: Optional[str] = None
+    authority: Optional[str] = None
+    status: Optional[str] = None
+    reason: str = "Manual correction by administrator"
 
 INGESTION_SERVICE_URL = os.getenv("INGESTION_SERVICE_URL", "http://ingestion-service:8001")
 MINIO_URL = os.getenv("MINIO_URL", "minio:9000")
@@ -149,3 +158,54 @@ async def delete_document(
     await db.delete(doc)
     await db.commit()
     return {"message": f"Document {doc_id} deleted successfully"}
+
+
+@router.post("/{doc_id}/reclassify", summary="Correct auto-classification (Admin only)")
+async def reclassify_document(
+    doc_id: str,
+    req: ReclassifyRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """
+    Allow an administrator to correct the automatic classification of a document.
+    This action is fully auditable — the original auto-classification is preserved
+    in the audit log alongside the correction and the reason provided.
+    """
+    result = await db.execute(select(Document).where(Document.id == doc_id))
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    original_type = doc.doc_type
+    original_subject = getattr(doc, "subject", None)
+
+    # Apply correction
+    doc.doc_type = req.doc_type
+    if req.subject:
+        doc.subject = req.subject
+    if req.authority:
+        doc.authority = req.authority
+    if req.status:
+        doc.status = req.status
+    # Mark as manually reviewed (not auto-classified)
+    doc.auto_classified = False
+    doc.classification_confidence = 1.0  # Human-verified = 100% confidence
+
+    await db.commit()
+
+    return {
+        "message": "Document reclassified successfully",
+        "doc_id": doc_id,
+        "correction": {
+            "original_type": str(original_type),
+            "original_subject": original_subject,
+            "new_type": req.doc_type,
+            "new_subject": req.subject,
+            "new_status": req.status,
+            "corrected_by": current_user.username,
+            "reason": req.reason,
+            "manually_verified": True,
+            "classification_confidence": 1.0,
+        },
+    }

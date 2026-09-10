@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useAuthStore } from '../store/authStore'
 
 const EXAMPLE_QUERIES = [
@@ -9,12 +9,17 @@ const EXAMPLE_QUERIES = [
   'What is the total budget allocation for education in 2024-25?',
 ]
 
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+const speechSupported = !!SpeechRecognition
+
 export default function SearchPage() {
   const { authHeaders } = useAuthStore()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState(null)
   const [loading, setLoading] = useState(false)
   const [includeSuperseded, setIncludeSuperseded] = useState(false)
+  const [listening, setListening] = useState(false)
+  const recognitionRef = useRef(null)
 
   const doSearch = async (q = query) => {
     if (!q.trim()) return
@@ -31,6 +36,31 @@ export default function SearchPage() {
       if (resp.ok) setResults(await resp.json())
     } catch (e) { console.error(e) }
     setLoading(false)
+  }
+
+  const toggleListening = () => {
+    if (!speechSupported) return
+    if (listening) {
+      recognitionRef.current?.stop()
+      setListening(false)
+      return
+    }
+    const recognition = new SpeechRecognition()
+    recognition.lang = 'en-IN'
+    recognition.interimResults = false
+    recognition.maxAlternatives = 1
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript
+      setQuery(transcript)
+      setListening(false)
+      // Auto-search after voice input
+      setTimeout(() => doSearch(transcript), 200)
+    }
+    recognition.onerror = () => setListening(false)
+    recognition.onend = () => setListening(false)
+    recognition.start()
+    recognitionRef.current = recognition
+    setListening(true)
   }
 
   return (
@@ -58,6 +88,26 @@ export default function SearchPage() {
               placeholder="Ask anything about Kerala Finance Department orders, circulars, or GST policies..."
             />
           </div>
+          {/* Voice input button */}
+          <button
+            id="voice-search-btn"
+            onClick={toggleListening}
+            title={speechSupported ? (listening ? 'Stop listening' : 'Click to speak your query (non-sensitive queries only)') : 'Voice input not supported in this browser (use Chrome/Edge)'}
+            style={{
+              padding: '0 16px',
+              borderRadius: '12px',
+              border: `1px solid ${listening ? '#ef4444' : speechSupported ? 'var(--color-border-accent)' : 'var(--color-border)'}`,
+              background: listening ? 'rgba(239,68,68,0.15)' : speechSupported ? 'var(--color-bg-card)' : 'var(--color-bg-input)',
+              color: listening ? '#ef4444' : speechSupported ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+              cursor: speechSupported ? 'pointer' : 'not-allowed',
+              fontSize: '1.2rem',
+              transition: 'all 0.2s',
+              animation: listening ? 'pulse 1s infinite' : 'none',
+              opacity: speechSupported ? 1 : 0.5,
+            }}
+          >
+            {listening ? '⏹️' : '🎙️'}
+          </button>
           <button className="btn btn-primary" onClick={() => doSearch()} disabled={loading}>
             {loading ? <span className="loading-spinner" /> : 'Search'}
           </button>
