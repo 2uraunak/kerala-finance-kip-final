@@ -156,9 +156,9 @@ async def search(
     - citations: structured source references with status
     - lineage_check: superseded order detection + warning before filtering
     """
-    from sentence_transformers import SentenceTransformer
-    model = SentenceTransformer(os.getenv("EMBED_MODEL", "all-MiniLM-L6-v2"))
-    query_embedding = model.encode([q], normalize_embeddings=True)[0].tolist()
+    from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+    _embed = DefaultEmbeddingFunction()
+    query_embedding = _embed([q])[0]
 
     filters = {}
     if doc_type:
@@ -235,11 +235,11 @@ async def search(
 @app.post("/semantic")
 async def semantic_search_endpoint(body: dict):
     """Pure semantic search."""
-    from sentence_transformers import SentenceTransformer
-    model = SentenceTransformer(os.getenv("EMBED_MODEL", "all-MiniLM-L6-v2"))
+    from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+    _embed = DefaultEmbeddingFunction()
     q = body.get("q", "")
     top_k = body.get("top_k", 5)
-    query_embedding = model.encode([q], normalize_embeddings=True)[0].tolist()
+    query_embedding = _embed([q])[0]
     results = vector_search(query_embedding, top_k=top_k, include_restricted=body.get("include_restricted", False))
     return {"query": q, "results": results, "citations": build_citations(results)}
 
@@ -247,9 +247,9 @@ async def semantic_search_endpoint(body: dict):
 @app.post("/chat")
 async def chat(body: ChatRequest):
     """Multi-turn conversational Q&A."""
-    from sentence_transformers import SentenceTransformer
-    model = SentenceTransformer(os.getenv("EMBED_MODEL", "all-MiniLM-L6-v2"))
-    query_embedding = model.encode([body.message], normalize_embeddings=True)[0].tolist()
+    from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+    _embed = DefaultEmbeddingFunction()
+    query_embedding = _embed([body.message])[0]
     vec_results = vector_search(query_embedding, top_k=6, include_restricted=body.include_restricted)
     kw_results = bm25_search(body.message, top_k=6)
     merged = reciprocal_rank_fusion(vec_results, kw_results)[:5]

@@ -135,27 +135,14 @@ services:
       - ./scripts:/app/scripts:ro
     restart: unless-stopped
 
-  celery-worker:
-    build: ./services/ingestion-service
-    container_name: kip-celery-worker
-    command: celery -A tasks.ingest_document worker --loglevel=info --concurrency=2
-    environment:
-      - DATABASE_URL=postgresql://kip:kip_secret@postgres:5432/kipdb
-      - REDIS_URL=redis://redis:6379/0
-      - MINIO_URL=minio:9000
-      - MINIO_USER=minioadmin
-      - MINIO_PASSWORD=minioadmin123
-      - CHROMADB_URL=http://chromadb:8000
-      - OLLAMA_URL=http://ollama:11434
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./data/sample_documents:/app/sample_documents:ro
-      - ./scripts:/app/scripts:ro
-    restart: unless-stopped
+  # celery-worker: DISABLED FOR DEMO (not needed for 8-min demo, very slow build)
+  # Uncomment after demo if background PDF processing is needed
+  # celery-worker:
+  #   build: ./services/ingestion-service
+  #   container_name: kip-celery-worker
+  #   command: celery -A tasks.ingest_document worker --loglevel=info --concurrency=2
+  #   ...
+
 
   search-service:
     build: ./services/search-service
@@ -196,18 +183,15 @@ services:
       - MINIO_PASSWORD=minioadmin123
     restart: unless-stopped
 
-  gst-agent-service:
-    build: ./services/gst-agent-service
-    container_name: kip-gst-agent
-    ports:
-      - "8005:8005"
-    environment:
-      - CHROMADB_URL=http://chromadb:8000
-      - OLLAMA_URL=http://ollama:11434
-      - SEARCH_SERVICE_URL=http://search-service:8002
-    depends_on:
-      - chromadb
-    restart: unless-stopped
+  # gst-agent-service: DISABLED FOR DEMO (not in 8-min demo script, very slow build)
+  # Uncomment after demo if GST assistant page is needed
+  # gst-agent-service:
+  #   build: ./services/gst-agent-service
+  #   container_name: kip-gst-agent
+  #   ports:
+  #     - "8005:8005"
+  #   ...
+
 
   policy-agent-service:
     build: ./services/policy-agent-service
