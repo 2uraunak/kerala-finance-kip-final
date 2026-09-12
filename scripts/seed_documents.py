@@ -434,28 +434,32 @@ def seed_documents():
                 session.execute(
                     text("""
                     INSERT INTO documents (
-                        id, title, doc_number, doc_type, status, department, subject,
-                        authority, year, issue_date, is_scanned, is_restricted,
+                        id, title, doc_number, doc_type, status, department,
+                        year, issue_date, is_scanned, is_restricted,
                         is_indexed, tags, raw_text, summary,
-                        classification_confidence, auto_classified,
-                        created_at, updated_at
+                        created_at, updated_at, created_by
                     ) VALUES (
-                        :id, :title, :doc_number, :doc_type, :status, :department,
-                        :subject, :authority, :year, :issue_date, :is_scanned,
-                        :is_restricted, true, :tags, :raw_text, :summary,
-                        :classification_confidence, :auto_classified,
-                        now(), now()
+                        :id, :title, :doc_number, :doc_type::documenttype, :status::documentstatus,
+                        :department, :year, :issue_date, :is_scanned,
+                        :is_restricted, true, :tags::json, :raw_text, :summary,
+                        now(), now(), 'seed_script'
                     )
                     ON CONFLICT (doc_number) DO NOTHING
                     """),
                     {
-                        **doc,
-                        "tags": json.dumps(doc.get("tags", [])),
+                        "id": doc["id"],
+                        "title": doc["title"],
+                        "doc_number": doc["doc_number"],
+                        "doc_type": doc["doc_type"].upper(),
+                        "status": doc["status"].upper(),
+                        "department": doc.get("department", "Finance Department, Kerala"),
+                        "year": doc.get("year"),
                         "issue_date": datetime.strptime(doc["issue_date"], "%Y-%m-%d"),
-                        "subject": doc.get("subject", "General"),
-                        "authority": doc.get("authority", "Finance Department, Kerala"),
-                        "classification_confidence": doc.get("classification_confidence", 0.85),
-                        "auto_classified": doc.get("auto_classified", True),
+                        "is_scanned": doc.get("is_scanned", False),
+                        "is_restricted": doc.get("is_restricted", False),
+                        "tags": json.dumps(doc.get("tags", [])),
+                        "raw_text": doc.get("raw_text", ""),
+                        "summary": doc.get("summary", ""),
                     },
                 )
                 print(f"✅ Seeded: {doc['doc_number']} — {doc['title'][:60]}...")

@@ -98,9 +98,15 @@ export default function GSTAssistant() {
                   {msg.citations?.length > 0 && (
                     <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                       {msg.citations.map((c, ci) => (
-                        <span key={ci} className="source-label" style={{ fontSize: '0.7rem' }}>
-                          {c.source_label}
-                          <span className={`badge badge-${c.status_label?.toLowerCase()}`} style={{ fontSize: '0.6rem' }}>{c.status_label}</span>
+                        <span 
+                          key={ci} 
+                          className="source-label" 
+                          style={{ fontSize: '0.7rem', cursor: 'pointer', borderBottom: '1px dashed var(--color-accent)' }}
+                          onClick={() => window.open(`/api/v1/documents/${c.doc_number}/download`, '_blank')}
+                          title="Click to view document"
+                        >
+                          📄 {c.source_label.replace('📄 ', '')}
+                          <span className={`badge badge-${c.status_label?.toLowerCase()}`} style={{ fontSize: '0.6rem', marginLeft: '4px' }}>{c.status_label}</span>
                         </span>
                       ))}
                     </div>
