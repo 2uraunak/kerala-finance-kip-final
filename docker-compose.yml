@@ -112,28 +112,13 @@ services:
       - ./tests:/app/tests:ro
     restart: unless-stopped
 
-  ingestion-service:
-    build: ./services/ingestion-service
-    container_name: kip-ingestion
-    ports:
-      - "8001:8001"
-    environment:
-      - DATABASE_URL=postgresql://kip:kip_secret@postgres:5432/kipdb
-      - REDIS_URL=redis://redis:6379/0
-      - MINIO_URL=minio:9000
-      - MINIO_USER=minioadmin
-      - MINIO_PASSWORD=minioadmin123
-      - CHROMADB_URL=http://chromadb:8000
-      - OLLAMA_URL=http://ollama:11434
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./data/sample_documents:/app/sample_documents:ro
-      - ./scripts:/app/scripts:ro
-    restart: unless-stopped
+  # ingestion-service: DISABLED FOR DEMO
+  # seed_documents.py writes directly to PostgreSQL + ChromaDB — no ingestion service needed
+  # Uncomment if you need to demo live document uploads
+  # ingestion-service:
+  #   build: ./services/ingestion-service  (HEAVY: ~60min build due to unstructured[pdf])
+  #   ...
+
 
   # celery-worker: DISABLED FOR DEMO (not needed for 8-min demo, very slow build)
   # Uncomment after demo if background PDF processing is needed
