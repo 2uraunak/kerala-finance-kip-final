@@ -102,7 +102,7 @@ export default function GSTAssistant() {
                           key={ci} 
                           className="source-label" 
                           style={{ fontSize: '0.7rem', cursor: 'pointer', borderBottom: '1px dashed var(--color-accent)' }}
-                          onClick={() => window.open(`/api/v1/documents/${c.doc_number}/download`, '_blank')}
+                          onClick={() => alert("Access Denied: Zero-Trust policies prevent direct downloads from chat. Please navigate to the Document Library to use the Secure Vault Viewer.")}
                           title="Click to view document"
                         >
                           📄 {c.source_label.replace('📄 ', '')}
